@@ -30,7 +30,7 @@ print("Sarimax seasonal order {0}".format(mseasorder))
 fitted = model.fit(train)
 yfore = fitted.predict(n_periods=4)  # forecast
 ypred = fitted.predict_in_sample()
-plt.plot(ds, label='ds')
+plt.plot(logdiff, label='ds')
 plt.plot(ypred, label='ypred')
 plt.plot([None for i in ypred] + [x for x in yfore], label='yfore')
 plt.xlabel('time')
