@@ -16,7 +16,7 @@ def create_dataset(dataset, look_back=1):
 
 np.random.seed(550) # for reproducibility
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
-df = pd.read_csv('..\\BoxJenkins.csv', usecols=[1], names=['Passengers'], header=0)
+df = pd.read_csv('../res/BoxJenkins.csv', usecols=[1], names=['Passengers'], header=0)
 dataset = df.values # time series values
 dataset = dataset.astype('float32') # needed for MLP input
 dataset = df.values  # time series values

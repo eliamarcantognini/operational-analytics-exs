@@ -2,7 +2,7 @@ import pandas as pd, numpy as np, os
 import matplotlib.pyplot as plt
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
-df = pd.read_csv('..\\gioiellerie.csv', header=0)
+df = pd.read_csv('../res/gioiellerie.csv', header=0)
 df["period"] = df["year"].map(str) + "-" + df["month"].map(str)
 df['period'] = pd.to_datetime(df['period'], format="%Y-%m").dt.to_period('M')
 # df = df.set_index('period')

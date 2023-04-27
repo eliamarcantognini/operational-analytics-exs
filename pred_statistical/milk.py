@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import pmdarima as pm
 
-df = pd.read_csv('../monthly_milk_production.csv', header=0)
+df = pd.read_csv('../res/monthly_milk_production.csv', header=0)
 dm = df.Production.to_numpy()
 
 cutpoint = int(len(dm) * 0.7)

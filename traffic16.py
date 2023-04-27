@@ -3,7 +3,7 @@ import pandas as pd
 from scipy import stats # to be used later
 import matplotlib.pyplot as plt
 import os
-df = pd.read_csv('traffico16.csv')  # dataframe (series)
+df = pd.read_csv('res/traffico16.csv')  # dataframe (series)
 npa = df['ago1'].to_numpy()  # numpy array
 plt.hist(npa, bins=10, color='#00AA00', edgecolor='black')
 plt.title(df.columns[0])

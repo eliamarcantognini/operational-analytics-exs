@@ -2,7 +2,7 @@ import pandas as pd
 from matplotlib import pyplot as plt
 from statsmodels.tsa.seasonal import seasonal_decompose
 
-df = pd.read_csv("../traffico16.csv")
+df = pd.read_csv("../res/traffico16.csv")
 col = "ago2"
 series = df[col].fillna(value=df[col].mean())
 result = seasonal_decompose(series, model='additive', period=7)
