@@ -1,11 +1,15 @@
-import numpy as np, pandas as pd, matplotlib.pyplot as plt, pmdarima as pm
-from statsmodels.tsa.ar_model import AutoReg
-from statsmodels.tsa.vector_ar.var_model import VAR
-from statsmodels.tsa.arima.model import ARIMA
-from sklearn.metrics import mean_squared_error as mse
-from statsmodels.tsa.stattools import acf
-from statsmodels.tsa.statespace.sarimax import SARIMAX
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import pmdarima as pm
 import statsmodels.api as sm
+from sklearn.metrics import mean_squared_error as mse
+from statsmodels.tsa.ar_model import AutoReg
+from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
+from statsmodels.tsa.stattools import acf
 
 
 def forecast_accuracy(forecast, actual):
@@ -21,6 +25,28 @@ def forecast_accuracy(forecast, actual):
     acf1 = acf(forecast - actual)[1]  # ACF1
     return ({'mape': mape, 'me': me, 'mae': mae, 'mpe': mpe, 'rmse': rmse,
              'acf1': acf1, 'corr': corr, 'minmax': minmax})
+
+
+# x: series, m: seasonality, nfor: num forecast
+def holtwinters(x, m, nfor, alpha=0.5, beta=0.5, gamma=0.5):
+    Y = x[:]
+    initial_values = np.array([0.0, 1.0, 0.0])
+    boundaries = [(0, 1), (0, 1), (0, 1)]
+    type = 'multiplicative'  # could have been additive
+    a = [sum(Y[0:m]) / float(m)]
+    b = [(sum(Y[m:2 * m]) - sum(Y[0:m])) / m ** 2]
+    s = [Y[i] / a[0] for i in range(m)]
+    y = [(a[0] + b[0]) * s[0]]
+    rmse = 0
+    for i in range(len(Y) + nfor):
+        if i == len(Y):
+            Y.append((a[-1] + b[-1]) * s[-m])
+        a.append(alpha * (Y[i] / s[i]) + (1 - alpha) * (a[i] + b[i]))
+        b.append(beta * (a[i + 1] - a[i]) + (1 - beta) * b[i])
+        s.append(gamma * (Y[i] / (a[i] + b[i])) + (1 - gamma) * s[i])
+        y.append((a[i + 1] + b[i + 1]) * s[i + 1])
+    rmse = np.sqrt(sum([(m - n) ** 2 for m, n in zip(Y[:-nfor], y[:-nfor - 1])]) / len(Y[:-nfor]))
+    return Y, rmse
 
 
 # dataset
@@ -135,9 +161,22 @@ plt.xlabel('time')
 plt.ylabel('production')
 plt.title('SARIMAX')
 plt.legend()
-
 sm.graphics.tsa.plot_acf(data, lags=40)
 plt.show()
 
+# Holt-Winters
+train = data[:-n_forecast]
+test = data[-n_forecast:]
+HWmodel = ExponentialSmoothing(train, seasonal_periods=12, trend="add", seasonal="mul", damped_trend=True,
+                               use_boxcox=True, initialization_method="estimated")
+HWmodel_fit = HWmodel.fit()
+# make forecast
+yfore = HWmodel_fit.predict(len(train), len(train) + n_forecast - 1)
 
-
+hwforecasts, rmse = holtwinters(np.array(train).flatten().tolist(), 12, n_forecast, alpha=0.6, beta=0.5, gamma=0.3)
+print("RMSE HW:", round(rmse, 2))
+plt.plot(hwforecasts, label="Holt-Winters custom")
+plt.plot(data, label="data")
+plt.plot([None for t in train] + [x for x in yfore], label="HoltWinter forecast")
+plt.legend()
+plt.show()
