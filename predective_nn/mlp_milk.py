@@ -15,8 +15,7 @@ def create_dataset(dataset, look_back=1):
     return np.array(dataX), np.array(dataY)
 
 np.random.seed(550) # for reproducibility
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
-df = pd.read_csv('../res/monthly_milk_production.csv', usecols=[1], names=['Production'], header=0)
+df = pd.read_csv('..\\..\\monthly_milk_production.csv', usecols=[1], names=['Production'], header=0)
 dataset = df.values # time series values
 dataset = dataset.astype('float32') # needed for MLP input
 dataset = df.values  # time series values
