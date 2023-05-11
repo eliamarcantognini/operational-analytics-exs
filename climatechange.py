@@ -1,6 +1,7 @@
 import pandas as pd, numpy as np, os
 import matplotlib.pyplot as plt
 import pmdarima as pm
+import seaborn as sns
 from statsmodels.tsa.seasonal import seasonal_decompose
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -11,9 +12,9 @@ print(df.info())
 df = df[df['City'] == 'Rome']
 df.drop(['Latitude', 'Longitude', 'City', 'Country', 'AverageTemperatureUncertainty'], axis=1, inplace=True)
 df['dt'] = pd.to_datetime(df['dt'])
-df.drop(df[df.dt < '1800-01-01'].index, inplace=True)
+df.drop(df[df.dt < '1900-01-01'].index, inplace=True)
 df.drop(df[df.dt >= '2013-01-01'].index, inplace=True)
-df.set_index('dt', inplace=True)
+# df.set_index('dt', inplace=True)
 print('after cleaning')
 print(df.info())
 
@@ -24,11 +25,11 @@ for i in range (1, 13):
     df[df.dt.dt.month == i].plot(x='dt', y='AverageTemperature', title='Rome temperature in month ' + str(i))
     plt.show()
 
-decomposition = seasonal_decompose(df)
-plt.plot(decomposition.trend)
+result = seasonal_decompose(df.AverageTemperature, period=12)
+plt.plot(result.trend)
+plt.title('trend seasonal decomposition')
 plt.show()
-plt.plot(decomposition.seasonal)
-plt.show()
+print(result.seasonal)
 
 cutpoint = int(len(df) * 0.7)
 train = df[:cutpoint]
