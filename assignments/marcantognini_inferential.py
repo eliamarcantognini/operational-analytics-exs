@@ -29,17 +29,18 @@ plt.show()
 married = df.Married.map({'Yes': 1, 'No': 0})
 pcc = np.corrcoef(df.LoanAmount, married)
 print(f"r[pearson]={pcc}")
-# pearson not valid for categorical data
+# pearson not valid for correlation between categorical and continuous variables
 # use point biserial correlation coefficient
 married.fillna(0, inplace=True)
-pbc = pointbiserialr(df.LoanAmount, married)
-print(f"r[pointbiserial]={pbc}")
+pbcorr, pbpval = pointbiserialr(df.LoanAmount, married)
+print(f"r[pointbiserial]={pbcorr}")
 sns.catplot(x="Married", y="LoanAmount", data=df)
 plt.show()
 sns.catplot(x="Married", y="LoanAmount", kind="box", data=df)
 plt.show()
 
 # calculate Chi square test for independence
+# between two categorical variables
 # feature matrix via crosstab (frequency table of the factors)
 alpha = 0.05
 dataset_table = pd.crosstab(df["Gender"], df["Education"])
