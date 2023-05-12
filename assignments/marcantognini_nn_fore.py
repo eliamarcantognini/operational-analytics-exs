@@ -37,18 +37,18 @@ print(df.info())
 df.drop(['country_code'], axis=1, inplace=True)
 df.drop(df[df['country_name'] != 'Arab World'].index, inplace=True)
 df.drop(['country_name'], axis=1, inplace=True)
-# df.set_index('year', inplace=True)
 print('after cleaning')
 print(df.info())
 print(df.describe())
 print(df.head(20))
 
-df.plot(title='CO2 emissions by Arab World')
+df.plot(x='year', y='value', title='CO2 emissions by Arab World')
 plt.show()
 
+dataset = df.value.values.astype('float32')
 n_forecast = 12
-train = df[:-n_forecast]
-test = df[-n_forecast:]
+train = dataset[:-n_forecast]
+test = dataset[-n_forecast:]
 
 # sarima model
 Smodel = pm.auto_arima(train, start_p=1, start_q=1,
@@ -64,19 +64,19 @@ sarima_fore = Smodel.fit(train).predict(n_periods=len(test))
 
 # scale data
 scaler = StandardScaler()
-scaler.fit_transform(train)
-scaled_train = scaler.transform(train)
-scaled_test = scaler.transform(test)
+scaler.fit_transform(train.reshape(-1, 1))
+scaled_train = scaler.transform(train.reshape(-1, 1))
+scaled_test = scaler.transform(test.reshape(-1, 1))
 
 # lstm model
 
 n_features = 1
 generator = TimeseriesGenerator(scaled_train, scaled_train, length=n_forecast, batch_size=n_features)
 lstm_model = Sequential()
-lstm_model.add(LSTM(20, activation='relu', input_shape=(n_forecast, n_features), dropout=0.05))
+lstm_model.add(LSTM(25, activation='relu', input_shape=(n_forecast, n_features), dropout=0.05))
 lstm_model.add(Dense(1))
 lstm_model.compile(optimizer='adam', loss='mse')
-lstm_model.fit(generator, epochs=25)
+lstm_model.fit(generator, epochs=70)
 lstm_model.summary()
 
 test_data = np.concatenate((scaled_train[-n_forecast:], scaled_test))
@@ -89,26 +89,30 @@ lstm_fore = scaler.inverse_transform(lstm_fore_scaled.reshape(-1, 1)).reshape(-1
 # mlp
 
 mlp_model = Sequential()
-mlp_model.add(Dense(20, activation='relu', input_shape=(n_forecast,)))
+mlp_model.add(Dense(25, activation='relu', input_shape=(n_forecast,)))
 mlp_model.add(Dense(1))
 mlp_model.compile(optimizer='adam', loss='mse')
-mlp_model.fit(trainX, trainY, epochs=25, verbose=0, batch_size=4)
+mlp_model.fit(trainX, trainY, epochs=60, verbose=0, batch_size=4)
 mlp_model.summary()
 
-mlp_fore_scaled = forecast(mlp_model, scaled_train, test_data, n_forecast, n_features)
+mlp_fore_scaled = mlp_model.predict(testX)
 mlp_fore = scaler.inverse_transform(mlp_fore_scaled.reshape(-1, 1)).reshape(-1)
 
 # plot
-plt.plot(df, label='data')
+plt.subplot(3, 1, 1)
+plt.plot(dataset, label='data')
 plt.plot([None for x in train] + [x for x in sarima_fore], label='sarima')
+plt.title('forecast-sarima')
 plt.legend()
-plt.show()
-plt.plot(df, label='data')
+plt.subplot(3, 1, 2)
+plt.plot(dataset, label='data')
 plt.plot([None for x in train]+[x for x in lstm_fore], label='lstm')
+plt.title('forecast-lstm')
 plt.legend()
-plt.show()
-plt.plot(df, label='data')
+plt.subplot(3, 1, 3)
+plt.plot(dataset, label='data')
 plt.plot([None for x in train]+[x for x in mlp_fore], label='mlp')
+plt.title('forecast-mlp')
 plt.legend()
 plt.show()
 
