@@ -31,28 +31,29 @@ def evaluate_model(model, X_train, y_train, X_test, y_test):
 
 
 # Loading data from CSV file
-data = pd.read_csv("..\\res\\milano_rents.csv")
+data = pd.read_csv("res/milano_rents.csv")
 
-# Data Augmentation
-date_range = pd.date_range(start='1990-02-01', end='2023-04-01', freq='MS')
-augmented_data = pd.DataFrame({'Date': date_range})
-data['Date'] = pd.to_datetime(data['Month'], format='%M-%Y')
-data = data.drop(columns=['Month'])
-data = data.set_index('Date')
-augmented_data = augmented_data.set_index('Date')
-data = pd.concat([augmented_data, data], axis=1, join='outer').fillna(method='ffill')
+# Data Exploration
+data['Date'] = pd.to_datetime(data['Month'], format='%m-%Y')
+data.drop(['Month'], axis=1, inplace=True)
+print(data.head())
+print(data.tail())
+print(data.shape)
+print(data.info())
 
-# Differencing to remove trend and seasonality
-data['PriceM2_diff'] = data['PriceM2'].diff().fillna(0)
-data['PriceM2_diff'] = data['PriceM2_diff'].diff(12).fillna(0)
+# # Differencing to remove trend and seasonality
+# data['PriceM2'] = data['PriceM2'].diff().fillna(0)
+# data['PriceM2'] = data['PriceM2'].diff(12).fillna(0)
 
-# Normalizing the data
-scaler = MinMaxScaler(feature_range=(0, 1))
-data_normalized = scaler.fit_transform(data[['PriceM2_diff']])
+# # Normalizing the data
+# scaler = MinMaxScaler(feature_range=(0, 1))
+# data = scaler.fit_transform(data[['PriceM2']])
+# print(data)
 
 # Splitting the data into training and test sets
-train_size = len(data_normalized) - 60
-train_data, test_data = data_normalized[:train_size], data_normalized[train_size:]
+prices = data['PriceM2'].values
+train_size = len(prices) - 60
+train_data, test_data = prices[:train_size], prices[train_size:]
 
 # Preparing data for model training
 look_back = 12
@@ -61,8 +62,10 @@ X_test, y_test = create_dataset(test_data, look_back)
 
 # Implementing prediction models
 # SARIMA model
-sarima_model = SARIMAX(data['PriceM2_diff'], order=(1, 0, 1), seasonal_order=(1, 1, 1, 12))
-sarima_train_rmse, sarima_test_rmse = evaluate_model(sarima_model, X_train, y_train, X_test, y_test)
+sarima_model = SARIMAX(data['PriceM2'], order=(1, 0, 1), seasonal_order=(1, 1, 1, 12))
+sarima_model = sarima_model.fit(disp=False)
+sarima_model.plot_diagnostics(figsize=(15, 12))
+# sarima_train_rmse, sarima_test_rmse = evaluate_model(sarima_model, X_train, y_train, X_test, y_test)
 
 # Random Forest model
 rf_model = RandomForestRegressor(n_estimators=100)
@@ -80,7 +83,7 @@ lstm_model = Sequential()
 lstm_model.add(LSTM(100, input_shape=(look_back, 1)))
 lstm_model.add(Dense(1))
 lstm_model.compile(loss='mean_squared_error', optimizer='adam')
-lstm_model.fit(X_train, y_train, epochs=100, batch_size=1, verbose=0)
+lstm_model.fit(X_train, y_train, epochs=100, batch_size=1, verbose='auto')
 
 train_predict = lstm_model.predict(X_train)
 test_predict = lstm_model.predict(X_test)
@@ -88,8 +91,8 @@ lstm_train_rmse = np.sqrt(mean_squared_error(y_train, train_predict))
 lstm_test_rmse = np.sqrt(mean_squared_error(y_test, test_predict))
 
 # Comparing model performances
-print("SARIMA Train RMSE:", sarima_train_rmse)
-print("SARIMA Test RMSE:", sarima_test_rmse)
+# print("SARIMA Train RMSE:", sarima_train_rmse)
+# print("SARIMA Test RMSE:", sarima_test_rmse)
 
 print("Random Forest Train RMSE:", rf_train_rmse)
 print("Random Forest Test RMSE:", rf_test_rmse)
