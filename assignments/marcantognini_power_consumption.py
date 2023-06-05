@@ -152,7 +152,8 @@ sarima_model = pm.auto_arima(train_active, start_p=1, start_q=1, test='adf', max
                              start_P=0, seasonal=True, d=None, D=0, trace=True,
                              error_action='ignore', suppress_warnings=True, stepwise=False,
                              n_jobs=-1)
-sarima_forecast = sarima_model.fit(train_active).predict(n_periods=len(test_active))
+sarima_model = sarima_model.fit(train_active)
+sarima_forecast = sarima_model.predict(n_periods=len(test_active))
 sarima_forecast_series = pd.Series([invert_boxcox(x, lmbda) for x in sarima_forecast], index=active[-10:].index)
 plt.plot(df.Active, label='data')
 plt.plot(sarima_forecast_series, label='sarima')
@@ -203,5 +204,22 @@ print('LSTM - RMSE: %.2f' % rmse(test_active, lstm_forecast.flatten()))
 print('MLP - RMSE: %.2f' % rmse(test_active, mlp_forecast.flatten()))
 print('MLP is the best model')
 
-# try to predict the future
 new_dates = pd.date_range(datetime.datetime(2010,12,31), periods=25, freq="M")
+print(new_dates)
+# try to predict the future
+# with sarima model
+sarima_forecast = sarima_model.predict(n_periods=len(new_dates))
+sarima_forecast_series = pd.Series([invert_boxcox(x, lmbda) for x in sarima_forecast], index=new_dates)
+# with lstm model
+lstm_forecast = lstm_model.predict(new_dates.reshape((25, 1, 1)))
+lstm_forecast_series = pd.Series([invert_boxcox(x, lmbda) for x in lstm_forecast], index=new_dates)
+# with mlp model
+mlp_forecast = mlp_model.predict(new_dates.reshape((25, 1, 1)))
+mlp_forecast_series = pd.Series([invert_boxcox(x, lmbda) for x in mlp_forecast], index=new_dates)
+# plot
+plt.plot(df.Active, label='data')
+plt.plot(sarima_forecast_series, label='sarima')
+plt.plot(lstm_forecast_series, label='lstm')
+plt.plot(mlp_forecast_series, label='mlp')
+plt.legend()
+plt.show()
