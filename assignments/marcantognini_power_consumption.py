@@ -3,7 +3,6 @@ import zipfile
 
 import matplotlib.pyplot as plt
 import pandas as pd
-import pmdarima as pm
 import requests
 
 #####################
@@ -51,9 +50,9 @@ data = data.groupby('Month').sum()
 # resample to monthly
 data = data.groupby(pd.Grouper(freq='M')).sum()
 # drop first month (incomplete)
-df = data.drop(data.index[0])
+df = data.drop([data.index[0], data.index[-1]])
 # drop last month (incomplete)
-df = data.drop(data.index[-1])
+# df = df.drop(df.index[-1])
 # the last year is incomplete, use it as test set
 
 # data exploration after cleaning
@@ -62,35 +61,85 @@ print(df.head(5))
 print(df.tail(5))
 plt.subplot(2, 1, 1)
 plt.plot(df.Active, 'b-', label='Global_active_power in kW')
+plt.legend()
 plt.subplot(2, 1, 2)
 plt.plot(df.Reactive, 'r-', label='Global_reactive_power in kW')
 plt.legend()
 plt.show()
 
-# create series
-active = df.Active
-reactive = df.Reactive
+# search for outliers:
+from statsmodels.tsa.seasonal import seasonal_decompose
 
-# split into train and test sets
-train_active = active[:-10]
-test_active = active[-10:]
-train_reactive = reactive[:-10]
-test_reactive = reactive[-10:]
-
-active_sar_notNorm = pm.auto_arima(train_active, start_p=1, start_q=1, test='adf', max_p=5, max_q=5, m=12,
-                               start_P=0, seasonal=True, d=None, D=0, trace=True,
-                               error_action='ignore', suppress_warnings=False, stepwise=True,
-                               n_jobs=-1)
-active_sar_notNorm_fore = active_sar_notNorm.fit(train_active).predict(n_periods=len(test_active))
-active_fore = pd.Series(active_sar_notNorm_fore, index=test_active.index)
-plt.plot(active, label='data')
-plt.plot(active_fore, label='sarima')
-plt.title('forecast with Sarima')
+result = seasonal_decompose(df.Active.values, model='additive', period=12, extrapolate_trend='freq')
+observed = result.observed
+trend = result.trend
+seasonal = result.seasonal
+resid = result.resid
+std = resid.std()
+plt.plot(resid, "o", label="datapoints")
+outliers = pd.Series(resid)
+outliers = pd.concat([outliers[outliers < (-1.5 * std)], outliers[outliers > (1.5 * std)]])
+plt.plot(outliers,  "*", color='violet', label="outliers")
+plt.hlines(0, 0, len(resid))
+plt.hlines(1.5 * std, 0, len(resid), color="red", label="std limits")
+plt.hlines(-1.5 * std, 0, len(resid), color="red")
+plt.title('STL decomposition')
 plt.legend()
 plt.show()
-# normalize data: try to compare normalized data and not normalized
-# scaler = MinMaxScaler()
-# active = scaler.fit_transform(active)
-# reactive = scaler.fit_transform(reactive.reshape(-1, 1))
-# print(active)
-# print(reactive)
+plt.subplot(2, 1, 1)
+plt.plot(observed, label='observed')
+plt.plot(trend, label='trend')
+plt.legend()
+plt.subplot(2, 1, 2)
+plt.plot(seasonal, label='seasonal')
+plt.plot(resid, label='residual')
+plt.legend()
+plt.show()
+
+
+
+# # power transform
+# # invert a boxcox transform for one value
+# def invert_boxcox(value, lam):
+#     # log case
+#     if lam == 0:
+#         return exp(value)
+#     # all other cases
+#     return exp(log(lam * value + 1) / lam)
+#
+#
+# # power transform
+# transformed, lmbda = boxcox(df.Active)
+# print(transformed, lmbda)
+# plt.subplot(2, 1, 1)
+# plt.plot(df.Active, label='data')
+# plt.legend()
+# plt.subplot(2, 1, 2)
+# plt.plot(pd.Series(transformed, index=df.Active.index), label='power')
+# plt.legend()
+# plt.show()
+
+# create series
+# active = pd.Series(transformed, index=df.Active.index)
+#
+# # split into train and test sets
+# train_active = active[:-10].values
+# test_active = active[-10:].values
+#
+# sarima_model = pm.auto_arima(train_active, start_p=1, start_q=1, test='adf', max_p=5, max_q=5, m=4,
+#                              start_P=0, seasonal=True, d=None, D=0, trace=True,
+#                              error_action='ignore', suppress_warnings=True, stepwise=False,
+#                              n_jobs=-1)
+# sarima_forecast = sarima_model.fit(train_active).predict(n_periods=len(test_active))
+# forecast = pd.Series(sarima_forecast, index=active[-10:].index)
+# plt.subplot(2, 1, 1)
+# plt.plot(active, label='data-pow')
+# plt.plot(forecast, label='sarima-pow')
+# # plt.title('forecast with Sarima')
+# plt.legend()
+# plt.subplot(2, 1, 2)
+# forecast = pd.Series([invert_boxcox(x, lmbda) for x in sarima_forecast], index=active[-10:].index)
+# plt.plot(df.Active, label='data')
+# plt.plot(forecast, label='sarima')
+# plt.legend()
+# plt.show()
