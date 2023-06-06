@@ -9,6 +9,7 @@ import pmdarima as pm
 import requests
 from keras.layers import LSTM, Dense
 from keras.models import Sequential
+from keras_preprocessing.sequence import TimeseriesGenerator
 from scipy.stats import boxcox
 from statsmodels.tools.eval_measures import rmse
 from statsmodels.tsa.seasonal import seasonal_decompose
@@ -58,9 +59,8 @@ data = data.groupby('Month').sum()
 # resample to monthly
 data = data.groupby(pd.Grouper(freq='M')).sum()
 # drop first month (incomplete)
-df = data.drop([data.index[0], data.index[-1]])
 # drop last month (incomplete)
-# df = df.drop(df.index[-1])
+df = data.drop([data.index[0], data.index[-1]])
 # the last year is incomplete, use it as test set
 
 # data exploration after cleaning
@@ -142,12 +142,11 @@ test_active = active[-10:].values
 
 #####################
 #####################
-# model
+# models
 #####################
 #####################
 
 # sarima model
-
 sarima_model = pm.auto_arima(train_active, start_p=1, start_q=1, test='adf', max_p=5, max_q=5, m=4,
                              start_P=0, seasonal=True, d=None, D=0, trace=True,
                              error_action='ignore', suppress_warnings=True, stepwise=False,
@@ -163,13 +162,14 @@ plt.show()
 
 # lstm model
 lstm_model = Sequential()
-lstm_model.add(LSTM(50, activation='relu', input_shape=(1, 1)))
+lstm_model.add(LSTM(50, activation='relu', input_shape=(len(train_active), 1)))
 lstm_model.add(Dense(1))
 lstm_model.compile(optimizer='adam', loss='mse')
 lstm_model.summary()
-# reshape input to be 3D [samples, timesteps, features]
-train_active_reshaped = train_active.reshape((len(train_active), 1, 1))
-test_active_reshaped = test_active.reshape((len(test_active), 1, 1))
+# train_active_reshaped = train_active.reshape((len(train_active), 1, 1))
+train_active_reshaped = train_active.reshape(-1, 1)
+# test_active_reshaped = test_active.reshape((len(test_active), 1, 1))
+test_active_reshaped = test_active.reshape(-1, 1)
 print(train_active.shape, test_active.shape)
 # fit model
 lstm_model.fit(train_active_reshaped, train_active_reshaped, epochs=200, verbose=0)
@@ -199,27 +199,63 @@ plt.title('MLP - RMSE: %.2f' % rmse(test_active, mlp_forecast.flatten()))
 plt.legend()
 plt.show()
 
-print('SARIMA - RMSE: %.2f' % rmse(test_active, sarima_forecast))
-print('LSTM - RMSE: %.2f' % rmse(test_active, lstm_forecast.flatten()))
-print('MLP - RMSE: %.2f' % rmse(test_active, mlp_forecast.flatten()))
-print('MLP is the best model')
-
-new_dates = pd.date_range(datetime.datetime(2010,12,31), periods=25, freq="M")
-print(new_dates)
-# try to predict the future
-# with sarima model
-sarima_forecast = sarima_model.predict(n_periods=len(new_dates))
-sarima_forecast_series = pd.Series([invert_boxcox(x, lmbda) for x in sarima_forecast], index=new_dates)
-# with lstm model
-lstm_forecast = lstm_model.predict(new_dates.reshape((25, 1, 1)))
-lstm_forecast_series = pd.Series([invert_boxcox(x, lmbda) for x in lstm_forecast], index=new_dates)
-# with mlp model
-mlp_forecast = mlp_model.predict(new_dates.reshape((25, 1, 1)))
-mlp_forecast_series = pd.Series([invert_boxcox(x, lmbda) for x in mlp_forecast], index=new_dates)
-# plot
+# compare models
 plt.plot(df.Active, label='data')
 plt.plot(sarima_forecast_series, label='sarima')
 plt.plot(lstm_forecast_series, label='lstm')
 plt.plot(mlp_forecast_series, label='mlp')
+plt.title('Comparison of models')
 plt.legend()
 plt.show()
+
+print('SARIMA - RMSE: %.2f' % rmse(test_active, sarima_forecast))
+print('LSTM - RMSE: %.2f' % rmse(test_active, lstm_forecast.flatten()))
+print('MLP - RMSE: %.2f' % rmse(test_active, mlp_forecast.flatten()))
+print('MLP is the best model with test data')
+
+dates_index = pd.date_range(datetime.datetime(2010, 12, 31), periods=25, freq="M")
+new_dates = pd.Series([df.Active.mean()] * len(dates_index), index=dates_index)
+print(new_dates)
+# try to predict the future
+# with sarima model
+sarima_fore_future = sarima_model.predict(n_periods=len(new_dates))
+sarima_fore_future_series = pd.Series([invert_boxcox(x, lmbda) for x in sarima_fore_future], index=dates_index)
+plt.plot(df.Active, label='data')
+plt.plot(sarima_forecast_series, label='fore-test')
+plt.plot(sarima_fore_future_series, label='fore-future')
+plt.title('sarima forecast')
+plt.legend()
+plt.show()
+# with lstm model
+# lstm_forecast = lstm_model.predict(new_dates.reshape((25, 1, 1)))
+lstm_fore_future = lstm_model.predict(new_dates.values.reshape(-1, 1))
+lstm_fore_future_series = pd.Series([invert_boxcox(x, lmbda) for x in lstm_fore_future], index=dates_index)
+plt.plot(df.Active, label='data')
+plt.plot(lstm_forecast_series, label='fore-test')
+plt.plot(lstm_fore_future_series, label='fore-future')
+plt.title('lstm forecast')
+plt.legend()
+plt.show()
+# with mlp model
+# mlp_forecast = mlp_model.predict(new_dates.reshape((25, 1, 1)))
+mlp_fore_future = mlp_model.predict(new_dates.values.reshape(-1, 1))
+mlp_fore_future_series = pd.Series([invert_boxcox(x, lmbda) for x in mlp_fore_future], index=dates_index)
+plt.plot(df.Active, label='data')
+plt.plot(mlp_forecast_series, label='fore-test')
+plt.plot(mlp_fore_future_series, label='fore-future')
+plt.title('mlp forecast')
+plt.legend()
+plt.show()
+# plot
+plt.plot(df.Active, label='data')
+plt.plot(sarima_fore_future_series, label='sarima')
+plt.plot(lstm_fore_future_series, label='lstm')
+plt.plot(mlp_fore_future_series, label='mlp')
+plt.title('Comparison of models')
+plt.legend()
+plt.show()
+
+print('SARIMA - RMSE: %.2f' % rmse(test_active, sarima_forecast))
+print('LSTM - RMSE: %.2f' % rmse(test_active, lstm_forecast.flatten()))
+print('MLP - RMSE: %.2f' % rmse(test_active, mlp_forecast.flatten()))
+print('MLP is the best model with future data')
