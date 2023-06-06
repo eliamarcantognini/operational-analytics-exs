@@ -1,17 +1,13 @@
-import datetime
 import os
 import zipfile
 from math import log, exp
 
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 import pmdarima as pm
-import tensorflow as tf
 import requests
 from keras.layers import LSTM, Dense
 from keras.models import Sequential
-from keras_preprocessing.sequence import TimeseriesGenerator
 from scipy.stats import boxcox
 from statsmodels.tools.eval_measures import rmse
 from statsmodels.tsa.seasonal import seasonal_decompose
@@ -45,15 +41,14 @@ print(data.tail(10))
 #####################
 #####################
 # drop columns
-data.drop(columns=['Global_intensity', 'Time', 'Voltage', 'Sub_metering_1', 'Sub_metering_2', 'Sub_metering_3'],
+data.drop(columns=['Global_reactive_power', 'Global_intensity', 'Time', 'Voltage', 'Sub_metering_1', 'Sub_metering_2',
+                   'Sub_metering_3'],
           inplace=True)
 # convert to datetime
 data['Date'] = pd.to_datetime(data['Date'], format='%d/%m/%Y')
 # convert to numeric
 data['Global_active_power'] = pd.to_numeric(data['Global_active_power'], errors='coerce', downcast='float')
-data['Global_reactive_power'] = pd.to_numeric(data['Global_reactive_power'], errors='coerce', downcast='float')
-data.rename(columns={'Date': 'Month', 'Global_active_power': 'Active', 'Global_reactive_power': 'Reactive'},
-            inplace=True)
+data.rename(columns={'Date': 'Month', 'Global_active_power': 'Active'}, inplace=True)
 plt.show()
 
 # sum power consumption per month
@@ -71,11 +66,8 @@ print(df.describe())
 print(df.head(5))
 print(df.tail(5))
 df.Active[df.Active == 0.0] = df.Active.mean()
-plt.subplot(2, 1, 1)
+df.Active.fillna(method='ffill', inplace=True)
 plt.plot(df.Active, 'b-', label='Global_active_power in kW')
-plt.legend()
-plt.subplot(2, 1, 2)
-plt.plot(df.Reactive, 'r-', label='Global_reactive_power in kW')
 plt.legend()
 plt.show()
 
@@ -133,17 +125,16 @@ plt.subplot(2, 1, 1)
 plt.plot(df.Active, label='data')
 plt.legend()
 plt.subplot(2, 1, 2)
-plt.plot(pd.Series(transformed, index=df.Active.index), label='power')
+plt.plot(pd.Series(transformed, index=df.Active.index), label='power-transformed')
 plt.legend()
 plt.show()
 
 # create series
 active = pd.Series(transformed, index=df.Active.index)
-
 # split into train and test sets
 train_size = int(len(df.Active) * 0.8)
-train_active = active[:train_size].values
-test_active = active[train_size:].values
+train_set = active[:train_size].values
+test_set = active[train_size:].values
 
 #####################
 #####################
@@ -151,19 +142,21 @@ test_active = active[train_size:].values
 #####################
 #####################
 
+plt.figure(figsize=(15, 15))
+
 # sarima model
-sarima_model = pm.auto_arima(train_active, start_p=1, start_q=1, test='adf', max_p=5, max_q=5, m=4,
+sarima_model = pm.auto_arima(train_set, start_p=1, start_q=1, test='adf', max_p=5, max_q=5, m=4,
                              start_P=0, seasonal=True, d=None, D=0, trace=True,
                              error_action='ignore', suppress_warnings=True, stepwise=False,
                              n_jobs=-1)
-sarima_model = sarima_model.fit(train_active)
-sarima_forecast = sarima_model.predict(n_periods=len(test_active))
+sarima_model = sarima_model.fit(train_set)
+sarima_forecast = sarima_model.predict(n_periods=len(test_set))
 sarima_forecast_series = pd.Series([invert_boxcox(x, lmbda) for x in sarima_forecast], index=active[train_size:].index)
+plt.subplot(4, 1, 1)
 plt.plot(df.Active, label='data')
 plt.plot(sarima_forecast_series, label='sarima')
-plt.title('SARIMA - RMSE: %.2f' % rmse(test_active, sarima_forecast))
+plt.title('SARIMA - RMSE: %.2f' % rmse(test_set, sarima_forecast))
 plt.legend()
-plt.show()
 
 # lstm model
 lstm_model = Sequential()
@@ -172,18 +165,18 @@ lstm_model.add(Dense(1))
 lstm_model.compile(optimizer='adam', loss='mse')
 lstm_model.summary()
 # reshape input to be 3D [samples, timesteps, features]
-train_active_reshaped = train_active.reshape((len(train_active), 1, 1))
-test_active_reshaped = test_active.reshape((len(test_active), 1, 1))
+train_active_reshaped = train_set.reshape((len(train_set), 1, 1))
+test_active_reshaped = test_set.reshape((len(test_set), 1, 1))
 # fit model
 lstm_model.fit(train_active_reshaped, train_active_reshaped, epochs=200, verbose=0)
 # make a prediction
 lstm_forecast = lstm_model.predict(test_active_reshaped)
 lstm_forecast_series = pd.Series([invert_boxcox(x, lmbda) for x in lstm_forecast], index=active[train_size:].index)
+plt.subplot(4, 1, 2)
 plt.plot(df.Active, label='data')
 plt.plot(lstm_forecast_series, label='lstm')
-plt.title('LSTM - RMSE: %.2f' % rmse(test_active, lstm_forecast.flatten()))
+plt.title('LSTM - RMSE: %.2f' % rmse(test_set, lstm_forecast.flatten()))
 plt.legend()
-plt.show()
 
 # mlp model
 mlp_model = Sequential()
@@ -196,14 +189,15 @@ mlp_model.fit(train_active_reshaped, train_active_reshaped, epochs=200, verbose=
 # make a prediction
 mlp_forecast = mlp_model.predict(test_active_reshaped)
 mlp_forecast_series = pd.Series([invert_boxcox(x, lmbda) for x in mlp_forecast], index=active[train_size:].index)
+plt.subplot(4, 1, 3)
 plt.plot(df.Active, label='data')
 plt.plot(mlp_forecast_series, label='mlp')
-plt.title('MLP - RMSE: %.2f' % rmse(test_active, mlp_forecast.flatten()))
+plt.title('MLP - RMSE: %.2f' % rmse(test_set, mlp_forecast.flatten()))
 plt.legend()
-plt.show()
 
 # compare models
-plt.plot(df.Active, label='data')
+plt.subplot(4, 1, 4)
+plt.plot(df.Active[train_size:], label='data')
 plt.plot(sarima_forecast_series, label='sarima')
 plt.plot(lstm_forecast_series, label='lstm')
 plt.plot(mlp_forecast_series, label='mlp')
@@ -211,7 +205,7 @@ plt.title('Comparison of models')
 plt.legend()
 plt.show()
 
-print('SARIMA - RMSE: %.2f' % rmse(test_active, sarima_forecast))
-print('LSTM - RMSE: %.2f' % rmse(test_active, lstm_forecast.flatten()))
-print('MLP - RMSE: %.2f' % rmse(test_active, mlp_forecast.flatten()))
+print('SARIMA - RMSE: %.2f' % rmse(test_set, sarima_forecast))
+print('LSTM - RMSE: %.2f' % rmse(test_set, lstm_forecast.flatten()))
+print('MLP - RMSE: %.2f' % rmse(test_set, mlp_forecast.flatten()))
 print('MLP is the best model with test data')
