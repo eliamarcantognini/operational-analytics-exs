@@ -30,11 +30,12 @@ else:
 # load data
 data = pd.read_csv('..\\res\\household_power_consumption.txt', sep=';', header=0, low_memory=False)
 # data exploration
+print('----------------\nData exploration\n----------------')
 print(data.info())
+print(data.describe())
 print(data.shape)
-print(data.head(10))
-print(data.tail(10))
-
+print(data.head(5))
+print('----------------')
 #####################
 #####################
 # preprocessing
@@ -59,14 +60,16 @@ data = data.groupby(pd.Grouper(freq='M')).sum()
 # drop last month (incomplete)
 df = data.drop([data.index[0], data.index[-1]])
 # the last year is incomplete, use it as test set
+# there is some missing data and some zeros, fill with the mean and ffill
+df.Active[df.Active == 0.0] = df.Active.mean()
+df.Active.fillna(method='ffill', inplace=True)
 
 # data exploration after cleaning
+print('----------------\nData exploration after cleaning\n----------------')
 print(df.info())
 print(df.describe())
 print(df.head(5))
-print(df.tail(5))
-df.Active[df.Active == 0.0] = df.Active.mean()
-df.Active.fillna(method='ffill', inplace=True)
+print('----------------')
 plt.plot(df.Active, 'b-', label='Global_active_power in kW')
 plt.legend()
 plt.show()
@@ -120,7 +123,6 @@ def invert_boxcox(value, lam):
 
 # power transform
 transformed, lmbda = boxcox(df.Active)
-print(transformed, lmbda)
 plt.subplot(2, 1, 1)
 plt.plot(df.Active, label='data')
 plt.legend()
@@ -205,6 +207,7 @@ plt.title('Comparison of models')
 plt.legend()
 plt.show()
 
+print('------------------\nMODEL COMPARISON\n------------------')
 print('SARIMA - RMSE: %.2f' % rmse(test_set, sarima_forecast))
 print('LSTM - RMSE: %.2f' % rmse(test_set, lstm_forecast.flatten()))
 print('MLP - RMSE: %.2f' % rmse(test_set, mlp_forecast.flatten()))
