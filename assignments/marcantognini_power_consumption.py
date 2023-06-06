@@ -4,8 +4,10 @@ import zipfile
 from math import log, exp
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import pmdarima as pm
+import tensorflow as tf
 import requests
 from keras.layers import LSTM, Dense
 from keras.models import Sequential
@@ -65,8 +67,10 @@ df = data.drop([data.index[0], data.index[-1]])
 
 # data exploration after cleaning
 print(df.info())
+print(df.describe())
 print(df.head(5))
 print(df.tail(5))
+df.Active[df.Active == 0.0] = df.Active.mean()
 plt.subplot(2, 1, 1)
 plt.plot(df.Active, 'b-', label='Global_active_power in kW')
 plt.legend()
@@ -137,8 +141,9 @@ plt.show()
 active = pd.Series(transformed, index=df.Active.index)
 
 # split into train and test sets
-train_active = active[:-10].values
-test_active = active[-10:].values
+train_size = int(len(df.Active) * 0.8)
+train_active = active[:train_size].values
+test_active = active[train_size:].values
 
 #####################
 #####################
@@ -153,7 +158,7 @@ sarima_model = pm.auto_arima(train_active, start_p=1, start_q=1, test='adf', max
                              n_jobs=-1)
 sarima_model = sarima_model.fit(train_active)
 sarima_forecast = sarima_model.predict(n_periods=len(test_active))
-sarima_forecast_series = pd.Series([invert_boxcox(x, lmbda) for x in sarima_forecast], index=active[-10:].index)
+sarima_forecast_series = pd.Series([invert_boxcox(x, lmbda) for x in sarima_forecast], index=active[train_size:].index)
 plt.plot(df.Active, label='data')
 plt.plot(sarima_forecast_series, label='sarima')
 plt.title('SARIMA - RMSE: %.2f' % rmse(test_active, sarima_forecast))
@@ -162,20 +167,18 @@ plt.show()
 
 # lstm model
 lstm_model = Sequential()
-lstm_model.add(LSTM(50, activation='relu', input_shape=(len(train_active), 1)))
+lstm_model.add(LSTM(50, activation='relu', input_shape=(1, 1)))
 lstm_model.add(Dense(1))
 lstm_model.compile(optimizer='adam', loss='mse')
 lstm_model.summary()
-# train_active_reshaped = train_active.reshape((len(train_active), 1, 1))
-train_active_reshaped = train_active.reshape(-1, 1)
-# test_active_reshaped = test_active.reshape((len(test_active), 1, 1))
-test_active_reshaped = test_active.reshape(-1, 1)
-print(train_active.shape, test_active.shape)
+# reshape input to be 3D [samples, timesteps, features]
+train_active_reshaped = train_active.reshape((len(train_active), 1, 1))
+test_active_reshaped = test_active.reshape((len(test_active), 1, 1))
 # fit model
 lstm_model.fit(train_active_reshaped, train_active_reshaped, epochs=200, verbose=0)
 # make a prediction
 lstm_forecast = lstm_model.predict(test_active_reshaped)
-lstm_forecast_series = pd.Series([invert_boxcox(x, lmbda) for x in lstm_forecast], index=active[-10:].index)
+lstm_forecast_series = pd.Series([invert_boxcox(x, lmbda) for x in lstm_forecast], index=active[train_size:].index)
 plt.plot(df.Active, label='data')
 plt.plot(lstm_forecast_series, label='lstm')
 plt.title('LSTM - RMSE: %.2f' % rmse(test_active, lstm_forecast.flatten()))
@@ -192,7 +195,7 @@ mlp_model.summary()
 mlp_model.fit(train_active_reshaped, train_active_reshaped, epochs=200, verbose=0)
 # make a prediction
 mlp_forecast = mlp_model.predict(test_active_reshaped)
-mlp_forecast_series = pd.Series([invert_boxcox(x, lmbda) for x in mlp_forecast], index=active[-10:].index)
+mlp_forecast_series = pd.Series([invert_boxcox(x, lmbda) for x in mlp_forecast], index=active[train_size:].index)
 plt.plot(df.Active, label='data')
 plt.plot(mlp_forecast_series, label='mlp')
 plt.title('MLP - RMSE: %.2f' % rmse(test_active, mlp_forecast.flatten()))
@@ -213,9 +216,26 @@ print('LSTM - RMSE: %.2f' % rmse(test_active, lstm_forecast.flatten()))
 print('MLP - RMSE: %.2f' % rmse(test_active, mlp_forecast.flatten()))
 print('MLP is the best model with test data')
 
+###################
+###################
+# forecast future
+###################
+###################
+
 dates_index = pd.date_range(datetime.datetime(2010, 12, 31), periods=25, freq="M")
-new_dates = pd.Series([df.Active.mean()] * len(dates_index), index=dates_index)
-print(new_dates)
+nan_series = pd.Series([np.NaN] * len(dates_index), index=dates_index)
+new_dates = pd.concat([active, nan_series])
+# new_dates = new_dates.fillna(method='ffill')
+
+for i in range(1, len(new_dates)):
+    if np.isnan(new_dates[i]):
+        new_dates[i] = np.random.normal(df.Active.mean(), df.Active.std(), 1)
+
+pippo = new_dates
+new_dates = new_dates[-25:]
+new_dates, lmbda = boxcox(new_dates)
+
+# new_dates = pd.Series([0] * len(dates_index), index=dates_index)
 # try to predict the future
 # with sarima model
 sarima_fore_future = sarima_model.predict(n_periods=len(new_dates))
@@ -226,9 +246,12 @@ plt.plot(sarima_fore_future_series, label='fore-future')
 plt.title('sarima forecast')
 plt.legend()
 plt.show()
+
+new_dates_reshaped = new_dates.reshape((len(new_dates), 1, 1))
+# new_dates_reshaped = new_dates
+print(new_dates_reshaped)
 # with lstm model
-# lstm_forecast = lstm_model.predict(new_dates.reshape((25, 1, 1)))
-lstm_fore_future = lstm_model.predict(new_dates.values.reshape(-1, 1))
+lstm_fore_future = lstm_model.predict(new_dates_reshaped)
 lstm_fore_future_series = pd.Series([invert_boxcox(x, lmbda) for x in lstm_fore_future], index=dates_index)
 plt.plot(df.Active, label='data')
 plt.plot(lstm_forecast_series, label='fore-test')
@@ -237,8 +260,7 @@ plt.title('lstm forecast')
 plt.legend()
 plt.show()
 # with mlp model
-# mlp_forecast = mlp_model.predict(new_dates.reshape((25, 1, 1)))
-mlp_fore_future = mlp_model.predict(new_dates.values.reshape(-1, 1))
+mlp_fore_future = mlp_model.predict(new_dates_reshaped)
 mlp_fore_future_series = pd.Series([invert_boxcox(x, lmbda) for x in mlp_fore_future], index=dates_index)
 plt.plot(df.Active, label='data')
 plt.plot(mlp_forecast_series, label='fore-test')
