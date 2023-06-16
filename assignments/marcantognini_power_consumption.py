@@ -50,7 +50,6 @@ data['Date'] = pd.to_datetime(data['Date'], format='%d/%m/%Y')
 # convert to numeric
 data['Global_active_power'] = pd.to_numeric(data['Global_active_power'], errors='coerce', downcast='float')
 data.rename(columns={'Date': 'Month', 'Global_active_power': 'Active'}, inplace=True)
-plt.show()
 
 # sum power consumption per month
 data = data.groupby('Month').sum()
