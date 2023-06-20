@@ -5,3 +5,4 @@
 /res/GlobalTemperatures.csv
 /res/household_power_consumption.txt
 /res/household_power_consumption.zip
+*.pyc
