@@ -139,10 +139,10 @@ plt.show()
 active = pd.Series(transformed, index=df.Active.index)
 # split into train and test sets
 train_size = int(len(df.Active) * 0.8)
-train_set = active[:train_size].values
-test_set = active[train_size:].values
-train_index = active[:train_size].index
-test_index = active[train_size:].index
+x_train = active[:train_size].values
+x_test = active[train_size:].values
+y_train = active[:train_size].index
+y_test = active[train_size:].index
 
 #####################
 #####################
@@ -153,17 +153,17 @@ test_index = active[train_size:].index
 plt.figure(figsize=(15, 20))
 
 # sarima model
-sarima_model = pm.auto_arima(train_set, start_p=1, start_q=1, test='adf', max_p=5, max_q=5, m=4,
+sarima_model = pm.auto_arima(x_train, start_p=1, start_q=1, test='adf', max_p=5, max_q=5, m=4,
                              start_P=0, seasonal=True, d=None, D=0, trace=True,
                              error_action='ignore', suppress_warnings=True, stepwise=False,
                              n_jobs=-1)
-sarima_model = sarima_model.fit(train_set)
-sarima_forecast = sarima_model.predict(n_periods=len(test_set))
+sarima_model = sarima_model.fit(x_train)
+sarima_forecast = sarima_model.predict(n_periods=len(x_test))
 sarima_forecast_series = pd.Series([invert_boxcox(x, lmbda) for x in sarima_forecast], index=active[train_size:].index)
 plt.subplot(6, 1, 1)
 plt.plot(df.Active, label='data')
 plt.plot(sarima_forecast_series, label='sarima')
-plt.title('SARIMA - RMSE: %.2f' % rmse(test_set, sarima_forecast))
+plt.title('SARIMA - RMSE: %.2f' % rmse(x_test, sarima_forecast))
 plt.legend()
 
 # lstm model
@@ -173,8 +173,8 @@ lstm_model.add(Dense(1))
 lstm_model.compile(optimizer='adam', loss='mse')
 lstm_model.summary()
 # reshape input to be 3D [samples, timesteps, features]
-train_active_reshaped = train_set.reshape((len(train_set), 1, 1))
-test_active_reshaped = test_set.reshape((len(test_set), 1, 1))
+train_active_reshaped = x_train.reshape((len(x_train), 1, 1))
+test_active_reshaped = x_test.reshape((len(x_test), 1, 1))
 # fit model
 lstm_model.fit(train_active_reshaped, train_active_reshaped, epochs=200, verbose=0)
 # make a prediction
@@ -183,7 +183,7 @@ lstm_forecast_series = pd.Series([invert_boxcox(x, lmbda) for x in lstm_forecast
 plt.subplot(6, 1, 2)
 plt.plot(df.Active, label='data')
 plt.plot(lstm_forecast_series, label='lstm')
-plt.title('LSTM - RMSE: %.2f' % rmse(test_set, lstm_forecast.flatten()))
+plt.title('LSTM - RMSE: %.2f' % rmse(x_test, lstm_forecast.flatten()))
 plt.legend()
 
 # mlp model
@@ -200,7 +200,7 @@ mlp_forecast_series = pd.Series([invert_boxcox(x, lmbda) for x in mlp_forecast],
 plt.subplot(6, 1, 3)
 plt.plot(df.Active, label='data')
 plt.plot(mlp_forecast_series, label='mlp')
-plt.title('MLP - RMSE: %.2f' % rmse(test_set, mlp_forecast.flatten()))
+plt.title('MLP - RMSE: %.2f' % rmse(x_test, mlp_forecast.flatten()))
 plt.legend()
 
 
@@ -209,12 +209,12 @@ plt.legend()
 # let's try also ML tree models: random forest and XGBoost. They are also hungry for data
 # so we expect them to perform worse than neural networks
 
-train_set = train_set.reshape(-1, 1)
-test_set = test_set.reshape(-1, 1)
+x_train = x_train.reshape(-1, 1)
+x_test = x_test.reshape(-1, 1)
 # standardize
 scaler = StandardScaler()
-train_set = scaler.fit_transform(train_set)
-test_set = scaler.transform(test_set)
+x_train = scaler.fit_transform(x_train)
+x_test = scaler.transform(x_test)
 
 
 # invert standardization and power transform
@@ -225,24 +225,24 @@ def invert_transformations(values):
 
 # random forest
 rf_model = RandomForestRegressor(max_depth=2, n_estimators=100)
-rf_model.fit(train_set, train_index)
-rf_forecast = rf_model.predict(test_set)
-rf_forecast_series = pd.Series(invert_transformations(rf_forecast), index=test_index)
+rf_model.fit(x_train, y_train)
+rf_forecast = rf_model.predict(x_test)
+rf_forecast_series = pd.Series(invert_transformations(rf_forecast), index=y_test)
 plt.subplot(6, 1, 4)
 plt.plot(df.Active, label='data')
 plt.plot(rf_forecast_series, label='rf')
-plt.title('Random Forest - RMSE: %.2f' % rmse(test_set.flatten(), rf_forecast))
+plt.title('Random Forest - RMSE: %.2f' % rmse(x_test.flatten(), rf_forecast))
 plt.legend()
 
 # XGBoost
 xgb_model = XGBRegressor(n_estimators=100)
-xgb_model.fit(train_set, train_index)
-xgb_forecast = xgb_model.predict(test_set)
-xgb_forecast_series = pd.Series(invert_transformations(xgb_forecast), index=test_index)
+xgb_model.fit(x_train, y_train)
+xgb_forecast = xgb_model.predict(x_test)
+xgb_forecast_series = pd.Series(invert_transformations(xgb_forecast), index=y_test)
 plt.subplot(6, 1, 5)
 plt.plot(df.Active, label='data')
 plt.plot(xgb_forecast_series, label='xgb')
-plt.title('XGBoost - RMSE: %.2f' % rmse(test_set.flatten(), xgb_forecast))
+plt.title('XGBoost - RMSE: %.2f' % rmse(x_test.flatten(), xgb_forecast))
 plt.legend()
 
 # compare models
@@ -258,15 +258,15 @@ plt.title('Comparison of models')
 plt.legend()
 plt.show()
 
-test_set = test_set.flatten()
+x_test = x_test.flatten()
 print('------------------\nMODEL COMPARISON\n------------------')
-print('SARIMA - RMSE: %.4f' % rmse(test_set, sarima_forecast))
-print('LSTM - RMSE: %.4f' % rmse(test_set, lstm_forecast.flatten()))
-print('MLP - RMSE: %.4f' % rmse(test_set, mlp_forecast.flatten()))
-print('Random Forest - RMSE: %.4f' % rmse(test_set, rf_forecast))
-print('XGBoost - RMSE: %.4f' % rmse(test_set, xgb_forecast))
+print('SARIMA - RMSE: %.4f' % rmse(x_test, sarima_forecast))
+print('LSTM - RMSE: %.4f' % rmse(x_test, lstm_forecast.flatten()))
+print('MLP - RMSE: %.4f' % rmse(x_test, mlp_forecast.flatten()))
+print('Random Forest - RMSE: %.4f' % rmse(x_test, rf_forecast))
+print('XGBoost - RMSE: %.4f' % rmse(x_test, xgb_forecast))
 print(
-    'MLPvsLSTM - DM: p-value: %.4f DM: %.4f ' % dm_test(test_set, lstm_forecast.flatten(), mlp_forecast.flatten(), h=1,
+    'MLPvsLSTM - Diebold-Marino:\n DM: %.4f - p-value: %.4f ' % dm_test(x_test, lstm_forecast.flatten(), mlp_forecast.flatten(), h=1,
                                                         crit='MSE'))
 # MLPvsLSTM - DM: p-value: 5.1069 DM: 0.0006
 # with 5% significance level, the p-value is less than 0.025 and z-value is greater than 1.96,
