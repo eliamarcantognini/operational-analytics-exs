@@ -225,3 +225,31 @@ print(
 print(
     'MLP seems better than LSTM, but in the DM test the p-value is not significant,'
     ' so we reject the null hypothesis that the two models have the same performance.')
+
+# MLP and LSTM seem to be the best models, but they are trained with a small dataset
+# neural networks are good for time series forecasting, but they need a lot of data
+# so let's try ML tree models: random forest and XGBoost
+
+# random forest
+rf_model = RandomForestRegressor(n_estimators=500)
+rf_model.fit(train_set.reshape(-1, 1), train_index)
+rf_forecast = rf_model.predict(test_set.reshape(-1, 1))
+rf_forecast_series = pd.Series([invert_boxcox(x, lmbda) for x in rf_forecast], index=test_index)
+plt.figure(figsize=(15, 5))
+plt.plot(df.Active[train_size:], label='data')
+plt.plot(rf_forecast_series, label='rf')
+plt.title('Random Forest - RMSE: %.2f' % rmse(test_set, rf_forecast))
+plt.legend()
+plt.show()
+
+# XGBoost
+xgb_model = XGBRegressor(n_estimators=500)
+xgb_model.fit(train_set.reshape(-1, 1), train_index)
+xgb_forecast = xgb_model.predict(test_set.reshape(-1, 1))
+xgb_forecast_series = pd.Series([invert_boxcox(x, lmbda) for x in xgb_forecast], index=test_index)
+plt.figure(figsize=(15, 5))
+plt.plot(df.Active[train_size:], label='data')
+plt.plot(xgb_forecast_series, label='xgb')
+plt.title('XGBoost - RMSE: %.2f' % rmse(test_set, xgb_forecast))
+plt.legend()
+plt.show()
