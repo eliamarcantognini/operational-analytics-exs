@@ -9,8 +9,12 @@ import requests
 from keras.layers import LSTM, Dense
 from keras.models import Sequential
 from scipy.stats import boxcox
+from sklearn.ensemble import RandomForestRegressor
 from statsmodels.tools.eval_measures import rmse
 from statsmodels.tsa.seasonal import seasonal_decompose
+from xgboost import XGBRegressor
+
+from dm_test import dm_test
 
 #####################
 # data loading
@@ -136,6 +140,8 @@ active = pd.Series(transformed, index=df.Active.index)
 train_size = int(len(df.Active) * 0.8)
 train_set = active[:train_size].values
 test_set = active[train_size:].values
+train_index = active[:train_size].index
+test_index = active[train_size:].index
 
 #####################
 #####################
@@ -207,7 +213,15 @@ plt.legend()
 plt.show()
 
 print('------------------\nMODEL COMPARISON\n------------------')
-print('SARIMA - RMSE: %.2f' % rmse(test_set, sarima_forecast))
-print('LSTM - RMSE: %.2f' % rmse(test_set, lstm_forecast.flatten()))
-print('MLP - RMSE: %.2f' % rmse(test_set, mlp_forecast.flatten()))
-print('MLP is the best model with test data')
+print('SARIMA - RMSE: %.4f' % rmse(test_set, sarima_forecast))
+print('LSTM - RMSE: %.4f' % rmse(test_set, lstm_forecast.flatten()))
+print('MLP - RMSE: %.4f' % rmse(test_set, mlp_forecast.flatten()))
+print(
+    'MLPvsLSTM - DM: p-value: %.4f DM: %.4f ' % dm_test(test_set, lstm_forecast.flatten(), mlp_forecast.flatten(), h=1,
+                                                        crit='MSE'))
+# MLPvsLSTM - DM: p-value: 5.1069 DM: 0.0006
+# with 5% significance level, the p-value is less than 0.025 and z-value is greater than 1.96,
+# so we can reject the null hypothesis that the two models have the same performance
+print(
+    'MLP seems better than LSTM, but in the DM test the p-value is not significant,'
+    ' so we reject the null hypothesis that the two models have the same performance.')
