@@ -150,7 +150,6 @@ y_test = active[train_size:].index
 #####################
 #####################
 
-plt.figure(figsize=(15, 20))
 
 # sarima model
 sarima_model = pm.auto_arima(x_train, start_p=1, start_q=1, test='adf', max_p=5, max_q=5, m=4,
@@ -158,8 +157,17 @@ sarima_model = pm.auto_arima(x_train, start_p=1, start_q=1, test='adf', max_p=5,
                              error_action='ignore', suppress_warnings=True, stepwise=False,
                              n_jobs=-1)
 sarima_model = sarima_model.fit(x_train)
+# plot diagnostics
+# Top Left: Residual errors should fluctuate around the mean with uniform variance.
+# Top right: density plot, should be normal distribution with zero mean.
+# Bottom left: Q-Q plot. Points should be aligned, distant points imply skewed distribution.
+# Bottom Right: correlogram (ACF plot) of residual errors.
+#   Significant autocorrelations indicate patterns in the data not explained by the model.
+sarima_model.plot_diagnostics(figsize=(15, 12))
+plt.show()
 sarima_forecast = sarima_model.predict(n_periods=len(x_test))
 sarima_forecast_series = pd.Series([invert_boxcox(x, lmbda) for x in sarima_forecast], index=active[train_size:].index)
+plt.figure(figsize=(15, 20))
 plt.subplot(6, 1, 1)
 plt.plot(df.Active, label='data')
 plt.plot(sarima_forecast_series, label='sarima')
