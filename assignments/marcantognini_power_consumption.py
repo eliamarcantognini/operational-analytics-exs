@@ -231,7 +231,7 @@ def invert_transformations(values):
     res = [invert_boxcox(x, lmbda) for x in res]
     return res
 
-# random forest
+# random forest, ensemble with bagging
 rf_model = RandomForestRegressor(max_depth=2, n_estimators=100)
 rf_model.fit(x_train, y_train)
 rf_forecast = rf_model.predict(x_test)
@@ -242,7 +242,7 @@ plt.plot(rf_forecast_series, label='rf')
 plt.title('Random Forest - RMSE: %.2f' % rmse(x_test.flatten(), rf_forecast))
 plt.legend()
 
-# XGBoost
+# XGBoost, ensemble with boosting
 xgb_model = XGBRegressor(n_estimators=100)
 xgb_model.fit(x_train, y_train)
 xgb_forecast = xgb_model.predict(x_test)
